@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stream P2P Celular</title>
+</head>
+<body style="background:#111; color:#fff; text-align:center; padding-top:30px; font-family:sans-serif;">
+    <h3 id="status">Iniciando...</h3>
+    <video id="videoElement" autoplay playsinline style="width:100%; max-width:400px; background:#000; border-radius:8px;"></video>
+    <br><br>
+    <button id="btn" style="padding:10px 20px; font-size:16px; background:#4CAF50; color:white; border:none; border-radius:5px;">Transmitir mi Cámara</button>
+
+    <!-- Librería PeerJS para conexión directa sin servidor intermediario -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script>
+        const peer = new Peer();
+        const isReceiver = confirm("¿Quieres ver la pantalla? (Acepta para ver, Cancela para transmitir)");
+
+        peer.on('open', (id) => {
+            if (!isReceiver) {
+                document.getElementById('status').innerText = "Tu ID de Emisor: " + id;
+            } else {
+                document.getElementById('status').innerText = "Modo Receptor";
+                let targetId = prompt("Ingresa el ID del celular que transmite:");
+                if (targetId) {
+                    const call = peer.call(targetId, new MediaStream());
+                    call.on('stream', (remoteStream) => {
+                        document.getElementById('videoElement').srcObject = remoteStream;
+                    });
+                }
+            }
+        });
+
+        if (!isReceiver) {
+            document.getElementById('btn').onclick = async () => {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
+                    document.getElementById('videoElement').srcObject = stream;
+
+                    peer.on('call', (call) => {
+                        call.answer(stream);
+                    });
+                    alert("¡Listo para transmitir! Comparte tu ID con el otro celular.");
+                } catch(err) {
+                    alert("Error: " + err);
+                }
+            };
+        } else {
+            document.getElementById('btn').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
