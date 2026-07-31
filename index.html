@@ -3,52 +3,142 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stream P2P Celular</title>
+    <title>Transmisión Celular P2P</title>
+    <!-- Importamos PeerJS desde un CDN confiable -->
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            background-color: #121212;
+            color: #ffffff;
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            text-align: center;
+            padding: 20px;
+        }
+        video {
+            width: 100%;
+            max-width: 400px;
+            border-radius: 10px;
+            background: #000;
+            margin-bottom: 20px;
+        }
+        .card {
+            background: #1e1e1e;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            max-width: 400px;
+            width: 100%;
+        }
+        input, button {
+            padding: 10px;
+            margin-top: 10px;
+            width: 100%;
+            border-radius: 5px;
+            border: none;
+            font-size: 16px;
+        }
+        input {
+            background: #2a2a2a;
+            color: white;
+            border: 1px solid #444;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        #id-display {
+            font-weight: bold;
+            color: #4CAF50;
+            word-break: break-all;
+            margin-top: 10px;
+        }
+    </style>
 </head>
-<body style="background:#111; color:#fff; text-align:center; padding-top:30px; font-family:sans-serif;">
-    <h3 id="status">Iniciando...</h3>
-    <video id="videoElement" autoplay playsinline style="width:100%; max-width:400px; background:#000; border-radius:8px;"></video>
-    <br><br>
-    <button id="btn" style="padding:10px 20px; font-size:16px; background:#4CAF50; color:white; border:none; border-radius:5px;">Transmitir mi Cámara</button>
+<body>
 
-    <!-- Librería PeerJS para conexión directa sin servidor intermediario -->
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <div class="card">
+        <h2>Transmisión P2P</h2>
+        <p>Tu ID de conexión:</p>
+        <div id="id-display">Generando ID...</div>
+        
+        <!-- Video local (oculto o visible según prefieras para verificar) -->
+        <video id="localVideo" autoplay playsinline muted></video>
+
+        <hr style="border-color: #333; margin: 20px 0;">
+
+        <p>¿Quieres ver otra transmisión?</p>
+        <input type="text" id="remoteIdInput" placeholder="Pega el ID del otro celular aquí">
+        <button onclick="conectarConRemoto()">Conectar y Ver</button>
+    </div>
+
+    <!-- Video remoto para cuando recibes la señal -->
+    <video id="remoteVideo" autoplay playsinline style="display:none;"></video>
+
     <script>
+        // Inicializamos PeerJS de forma automática
         const peer = new Peer();
-        const isReceiver = confirm("¿Quieres ver la pantalla? (Acepta para ver, Cancela para transmitir)");
+        let localStream = null;
 
         peer.on('open', (id) => {
-            if (!isReceiver) {
-                document.getElementById('status').innerText = "Tu ID de Emisor: " + id;
-            } else {
-                document.getElementById('status').innerText = "Modo Receptor";
-                let targetId = prompt("Ingresa el ID del celular que transmite:");
-                if (targetId) {
-                    const call = peer.call(targetId, new MediaStream());
-                    call.on('stream', (remoteStream) => {
-                        document.getElementById('videoElement').srcObject = remoteStream;
-                    });
-                }
-            }
+            document.getElementById('id-display').innerText = id;
+            console.log('Mi ID es: ' + id);
         });
 
-        if (!isReceiver) {
-            document.getElementById('btn').onclick = async () => {
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
-                    document.getElementById('videoElement').srcObject = stream;
+        // Solicitamos la cámara y micrófono automáticamente al cargar la página
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: true })
+            .then((stream) => {
+                localStream = stream;
+                const localVideo = document.getElementById('localVideo');
+                localVideo.srcObject = stream;
+            })
+            .catch((err) => {
+                console.error('Error al acceder a la cámara:', err);
+                alert('Es necesario dar permisos de cámara para transmitir.');
+            });
 
-                    peer.on('call', (call) => {
-                        call.answer(stream);
-                    });
-                    alert("¡Listo para transmitir! Comparte tu ID con el otro celular.");
-                } catch(err) {
-                    alert("Error: " + err);
-                }
-            };
-        } else {
-            document.getElementById('btn').style.display = 'none';
+        // Escuchamos si alguien se conecta a nuestro ID para transmitirle nuestra cámara
+        peer.on('call', (call) => {
+            call.answer(localStream);
+            call.on('stream', (remoteStream) => {
+                const remoteVideo = document.getElementById('remoteVideo');
+                remoteVideo.srcObject = remoteStream;
+                remoteVideo.style.display = 'block';
+                document.querySelector('.card').style.display = 'none'; // Oculta menú para ver video limpio
+            });
+        });
+
+        // Función para conectarse al ID de otro dispositivo y ver su transmisión
+        function conectarConRemoto() {
+            const remoteId = document.getElementById('remoteIdInput').value.trim();
+            if (!remoteId) {
+                alert('Por favor ingresa un ID válido.');
+                return;
+            }
+
+            const call = peer.call(remoteId, localStream);
+            call.on('stream', (remoteStream) => {
+                const remoteVideo = document.getElementById('remoteVideo');
+                remoteVideo.srcObject = remoteStream;
+                remoteVideo.style.display = 'block';
+                document.querySelector('.card').style.display = 'none';
+            });
+
+            call.on('error', (err) => {
+                console.error('Error en la llamada:', err);
+                alert('No se pudo establecer la conexión.');
+            });
         }
     </script>
 </body>
 </html>
+
